@@ -7,6 +7,7 @@ export interface Comment {
   isFeatured: boolean;
   likes: number;
   createdAt: string;
+  isTemp?: boolean;
 }
 
 export interface Post {
@@ -80,20 +81,32 @@ export interface Vote {
   type: 'single' | 'multiple';
   options: VoteOption[];
   isActive: boolean;
+  isPaused: boolean;
+  isFeatured: boolean;
+  order: number;
   endAt: string;
   totalVotes: number;
+  isTemp?: boolean;
 }
+
+export type QuestionStatus = 'pending' | 'approved' | 'rejected';
 
 export interface Question {
   id: string;
   content: string;
   author: string;
+  status: QuestionStatus;
   isAnswered: boolean;
   answer?: string;
   answerAuthor?: string;
   isPinned: boolean;
+  isFeatured: boolean;
   createdAt: string;
   color: string;
+  tags: string[];
+  brand?: string;
+  budget?: string;
+  isTemp?: boolean;
 }
 
 export interface User {
@@ -107,3 +120,60 @@ export interface User {
 }
 
 export type ThemeMode = 'dark' | 'light' | 'cyber';
+
+export interface SensitiveWordHit {
+  word: string;
+  count: number;
+  lastHitAt: string;
+}
+
+export interface ExportSummary {
+  exportTime: string;
+  timeRange: { start: string; end: string };
+  statistics: {
+    totalPosts: number;
+    totalComments: number;
+    tempComments: number;
+    totalVotes: number;
+    totalVoters: number;
+    totalQuestions: number;
+    pendingQuestions: number;
+    approvedQuestions: number;
+    answeredQuestions: number;
+    tempQuestions: number;
+    sensitiveWordHits: number;
+  };
+  hotPosts: Array<{ title: string; heat: number; author: string; comments: number; tags: string[] }>;
+  topUsers: Array<{ name: string; interactions: number; posts: number; level: number; badge: string }>;
+  voteResults: Array<{
+    id: string;
+    title: string;
+    description: string;
+    type: 'single' | 'multiple';
+    totalVotes: number;
+    isFeatured: boolean;
+    isPaused: boolean;
+    isTemp: boolean;
+    options: Array<{ label: string; votes: number; percentage: number }>;
+  }>;
+  featuredQuestions: Array<{
+    content: string;
+    author: string;
+    answer?: string;
+    answerAuthor?: string;
+    tags: string[];
+    brand?: string;
+    budget?: string;
+  }>;
+  allQuestions: Array<{
+    content: string;
+    author: string;
+    isAnswered: boolean;
+    answer?: string;
+    answerAuthor?: string;
+    isPinned: boolean;
+    createdAt: string;
+    tags: string[];
+  }>;
+  sensitiveWordStats: Array<{ word: string; hits: number; lastHitAt: string }>;
+}
