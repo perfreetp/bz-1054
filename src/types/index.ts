@@ -8,6 +8,7 @@ export interface Comment {
   likes: number;
   createdAt: string;
   isTemp?: boolean;
+  sessionId?: string;
 }
 
 export interface Post {
@@ -87,6 +88,7 @@ export interface Vote {
   endAt: string;
   totalVotes: number;
   isTemp?: boolean;
+  sessionId?: string;
 }
 
 export type QuestionStatus = 'pending' | 'approved' | 'rejected';
@@ -107,6 +109,7 @@ export interface Question {
   brand?: string;
   budget?: string;
   isTemp?: boolean;
+  sessionId?: string;
 }
 
 export interface User {
@@ -127,8 +130,36 @@ export interface SensitiveWordHit {
   lastHitAt: string;
 }
 
+export interface Session {
+  id: string;
+  name: string;
+  description: string;
+  startTime: string;
+  endTime: string;
+  isActive: boolean;
+  color: string;
+}
+
+export interface HostPlaylistItem {
+  id: string;
+  type: 'vote' | 'question';
+  refId: string;
+  order: number;
+  title: string;
+}
+
+export interface LiveMetricPoint {
+  time: string;
+  newQuestions: number;
+  voterCount: number;
+  commentHeat: number;
+  sensitiveHits: number;
+}
+
 export interface ExportSummary {
   exportTime: string;
+  sessionId?: string;
+  sessionName?: string;
   timeRange: { start: string; end: string };
   statistics: {
     totalPosts: number;

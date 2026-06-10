@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
-  HelpCircle, Send, Star, MessageCircle, CheckCircle, XCircle, Clock,
-  Filter, ChevronLeft, ChevronRight, Tag, DollarSign, Smartphone,
+  HelpCircle, Send, Star, MessageCircle, CheckCircle,
+  Filter, ChevronLeft, ChevronRight, DollarSign, Smartphone,
 } from 'lucide-react';
 import { useStore } from '@/store';
 import { cn } from '@/lib/utils';
@@ -9,15 +9,14 @@ import { brandTags, budgetTags } from '@/data/mockData';
 
 export default function Questions() {
   const {
-    questions, addQuestion, answerQuestion, toggleFeaturedQuestion,
-    approveQuestion, rejectQuestion, questionFilter, setQuestionFilter,
-    filterSensitiveWords, theme,
+    getSessionFilteredQuestions, addQuestion,
+    sessions, currentSessionId, switchSession, theme,
   } = useStore();
+
   const [questionText, setQuestionText] = useState('');
   const [questionAuthor, setQuestionAuthor] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('全部');
   const [selectedBudget, setSelectedBudget] = useState('全部');
-  const [answerInput, setAnswerInput] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [carouselIndex, setCarouselIndex] = useState(0);
 
@@ -26,8 +25,9 @@ export default function Questions() {
   const inputBg = theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-800/50 border-white/10';
   const textColor = theme === 'light' ? 'text-slate-800' : 'text-white';
 
-  const approvedQuestions = questions.filter((q) => q.status === 'approved');
-  const pendingQuestions = questions.filter((q) => q.status === 'pending');
+  const allQuestions = getSessionFilteredQuestions();
+
+  const approvedQuestions = allQuestions.filter((q) => q.status === 'approved');
   const featuredQuestions = approvedQuestions.filter((q) => q.isFeatured);
 
   const filteredQuestions = approvedQuestions.filter((q) => {
@@ -75,136 +75,10 @@ export default function Questions() {
     setSelectedBudget('全部');
   };
 
-  const handleAnswer = (qid: string) => {
-    const answer = answerInput[qid];
-    if (!answer?.trim()) return;
-    answerQuestion(qid, answer, '导购专家');
-    setAnswerInput((prev) => ({ ...prev, [qid]: '' }));
-  };
-
-  const QuestionCard = ({
-    q,
-    showControls = false,
-  }: {
-    q: typeof questions[number];
-    showControls?: boolean;
-  }) => (
-    <div className={cn(
-      'rounded-2xl p-5 border transition-all relative overflow-hidden bg-gradient-to-br',
-      q.color,
-      theme === 'light' ? 'border-slate-200' : 'border-white/10'
-    )}>
-      {q.isFeatured && (
-        <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/90 text-white text-xs font-medium">
-          <Star size={10} fill="currentColor" /> 精选
-        </div>
-      )}
-      {q.status === 'pending' && (
-        <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/90 text-white text-xs font-medium">
-          <Clock size={10} /> 待审核
-        </div>
-      )}
-      {q.isAnswered && (
-        <div className="absolute top-3 left-3 flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/90 text-white text-xs font-medium">
-          <CheckCircle size={10} fill="currentColor" /> 已回答
-        </div>
-      )}
-
-      <div className={cn('pt-4')}>
-        <p className={cn('text-base font-medium mb-3 leading-relaxed', textColor)}>{q.content}</p>
-        <div className="flex flex-wrap gap-2 mb-3">
-          {q.brand && (
-            <span className={cn(
-              'px-2 py-0.5 rounded-full text-xs flex items-center gap-1',
-              theme === 'light' ? 'bg-tech-100 text-tech-700' : 'bg-tech-500/20 text-tech-400'
-            )}>
-              <Smartphone size={10} /> {q.brand}
-            </span>
-          )}
-          {q.budget && (
-            <span className={cn(
-              'px-2 py-0.5 rounded-full text-xs flex items-center gap-1',
-              theme === 'light' ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-500/20 text-emerald-400'
-            )}>
-              <DollarSign size={10} /> {q.budget}
-            </span>
-          )}
-        </div>
-        <div className={cn('flex items-center gap-3 text-xs mb-4 pb-4 border-b', secondaryText, theme === 'light' ? 'border-slate-200' : 'border-white/10')}>
-          <span>👤 {q.author}</span>
-          <span>·</span>
-          <span>{q.createdAt}</span>
-        </div>
-      </div>
-
-      {q.isAnswered && q.answer && (
-        <div className={cn('p-4 rounded-xl', theme === 'light' ? 'bg-emerald-50' : 'bg-emerald-500/10')}>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-emerald-500 font-medium text-sm">💡 {q.answerAuthor || '专家'}</span>
-          </div>
-          <p className={cn('text-sm leading-relaxed', theme === 'light' ? 'text-slate-700' : 'text-emerald-100')}>{q.answer}</p>
-        </div>
-      )}
-
-      {showControls && q.status === 'pending' && (
-        <div className="mt-3 flex gap-2">
-          <button
-            onClick={() => approveQuestion(q.id)}
-            className="flex-1 py-2 rounded-lg bg-emerald-500 text-white text-sm font-medium hover:bg-emerald-600 transition-all flex items-center justify-center gap-1"
-          >
-            <CheckCircle size={14} /> 通过
-          </button>
-          <button
-            onClick={() => rejectQuestion(q.id)}
-            className="flex-1 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-all flex items-center justify-center gap-1"
-          >
-            <XCircle size={14} /> 拒绝
-          </button>
-        </div>
-      )}
-
-      {showControls && q.status === 'approved' && !q.isAnswered && (
-        <div className="space-y-2 mt-3">
-          <textarea
-            value={answerInput[q.id] || ''}
-            onChange={(e) => setAnswerInput((prev) => ({ ...prev, [q.id]: e.target.value }))}
-            placeholder="输入回答..."
-            className={cn('w-full px-3 py-2 rounded-lg border text-sm outline-none resize-none', inputBg, textColor, 'placeholder-slate-500 focus:border-cyber-500')}
-            rows={2}
-          />
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handleAnswer(q.id)}
-              className="px-3 py-1.5 rounded-lg bg-emerald-500/90 text-white text-xs font-medium hover:bg-emerald-500 transition-all"
-            >
-              提交回答
-            </button>
-            <button
-              onClick={() => toggleFeaturedQuestion(q.id)}
-              className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition-all', q.isFeatured ? 'bg-amber-500 text-white' : inputBg, secondaryText)}
-            >
-              <Star size={12} className="inline mr-1" />
-              {q.isFeatured ? '取消精选' : '设为精选'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showControls && q.status === 'approved' && q.isAnswered && (
-        <button
-          onClick={() => toggleFeaturedQuestion(q.id)}
-          className={cn('mt-3 w-full py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1', q.isFeatured ? 'bg-amber-500 text-white' : inputBg, secondaryText)}
-        >
-          <Star size={14} />
-          {q.isFeatured ? '取消精选' : '设为精选问答'}
-        </button>
-      )}
-    </div>
-  );
+  const currentSession = sessions.find((s) => s.id === currentSessionId);
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <HelpCircle className="text-cyber-400" size={28} />
@@ -214,16 +88,39 @@ export default function Questions() {
           <span className="flex items-center gap-1">
             <MessageCircle size={16} /> {approvedQuestions.length} 个已上墙
           </span>
-          <span className="flex items-center gap-1 text-amber-400">
-            <Clock size={16} /> {pendingQuestions.length} 待审核
-          </span>
           <span className="flex items-center gap-1 text-emerald-400">
             <CheckCircle size={16} /> {approvedQuestions.filter((q) => q.isAnswered).length} 已回答
           </span>
         </div>
       </div>
 
-      {/* Featured Carousel */}
+      <div className={cn('rounded-2xl p-4 border', cardBg)}>
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className={cn('text-sm font-medium', secondaryText)}>当前场次：</span>
+          <div className="flex flex-wrap gap-2">
+            {sessions.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => switchSession(s.id)}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+                  s.id === currentSessionId
+                    ? 'bg-cyber-500 text-white'
+                    : cn(inputBg, secondaryText)
+                )}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+          {currentSession && (
+            <span className={cn('text-xs', secondaryText)}>
+              {currentSession.startTime}-{currentSession.endTime} {currentSession.description}
+            </span>
+          )}
+        </div>
+      </div>
+
       {featuredQuestions.length > 0 && (
         <section className="relative">
           <h3 className={cn('text-lg font-bold mb-4 flex items-center gap-2', textColor)}>
@@ -292,7 +189,6 @@ export default function Questions() {
         </section>
       )}
 
-      {/* Submit Form */}
       <section className={cn('rounded-2xl p-6 border', cardBg)}>
         <h2 className={cn('text-lg font-bold mb-4', textColor)}>📝 提交你的购机问题</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -356,25 +252,6 @@ export default function Questions() {
         </form>
       </section>
 
-      {/* Pending Review Section */}
-      {pendingQuestions.length > 0 && (
-        <section>
-          <h3 className={cn('text-lg font-bold mb-4 flex items-center gap-2', textColor)}>
-            <Clock className="text-amber-400" size={20} />
-            待审核问题
-            <span className={cn('text-sm font-normal', secondaryText)}>
-              （{pendingQuestions.length} 个）
-            </span>
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {pendingQuestions.map((q) => (
-              <QuestionCard key={q.id} q={q} showControls />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Filter Tags */}
       <section>
         <div className="flex items-center gap-2 mb-4">
           <Filter className={secondaryText} size={18} />
@@ -386,12 +263,12 @@ export default function Questions() {
                 'px-3 py-1 rounded-full text-xs font-medium transition-all',
                 selectedBrand === '全部' && selectedBudget === '全部'
                   ? 'bg-cyber-500 text-white'
-                  : inputBg + ' ' + secondaryText
+                  : cn(inputBg, secondaryText)
               )}
             >
               全部
             </button>
-            {brandTags.slice(0, 4).map((brand) => (
+            {brandTags.map((brand) => (
               <button
                 key={brand}
                 onClick={() => { setSelectedBrand(brand); setSelectedBudget('全部'); }}
@@ -399,13 +276,13 @@ export default function Questions() {
                   'px-3 py-1 rounded-full text-xs font-medium transition-all flex items-center gap-1',
                   selectedBrand === brand && selectedBudget === '全部'
                     ? 'bg-tech-500 text-white'
-                    : inputBg + ' ' + secondaryText
+                    : cn(inputBg, secondaryText)
                 )}
               >
                 <Smartphone size={10} /> {brand}
               </button>
             ))}
-            {budgetTags.slice(0, 3).map((budget) => (
+            {budgetTags.map((budget) => (
               <button
                 key={budget}
                 onClick={() => { setSelectedBudget(budget); setSelectedBrand('全部'); }}
@@ -413,7 +290,7 @@ export default function Questions() {
                   'px-3 py-1 rounded-full text-xs font-medium transition-all flex items-center gap-1',
                   selectedBudget === budget && selectedBrand === '全部'
                     ? 'bg-emerald-500 text-white'
-                    : inputBg + ' ' + secondaryText
+                    : cn(inputBg, secondaryText)
                 )}
               >
                 <DollarSign size={10} /> {budget}
@@ -423,7 +300,6 @@ export default function Questions() {
         </div>
       </section>
 
-      {/* Approved Questions */}
       <section>
         <h3 className={cn('text-lg font-bold mb-4', textColor)}>
           上墙问题 <span className={secondaryText}>（{filteredQuestions.length}）</span>
@@ -431,7 +307,61 @@ export default function Questions() {
         {filteredQuestions.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredQuestions.map((q) => (
-              <QuestionCard key={q.id} q={q} showControls />
+              <div
+                key={q.id}
+                className={cn(
+                  'rounded-2xl p-5 border transition-all relative overflow-hidden bg-gradient-to-br',
+                  q.color,
+                  theme === 'light' ? 'border-slate-200' : 'border-white/10'
+                )}
+              >
+                {q.isFeatured && (
+                  <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/90 text-white text-xs font-medium">
+                    <Star size={10} fill="currentColor" /> 精选
+                  </div>
+                )}
+                {q.isAnswered && (
+                  <div className="absolute top-3 left-3 flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/90 text-white text-xs font-medium">
+                    <CheckCircle size={10} fill="currentColor" /> 已回答
+                  </div>
+                )}
+
+                <div className="pt-4">
+                  <p className={cn('text-base font-medium mb-3 leading-relaxed', textColor)}>{q.content}</p>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {q.brand && (
+                      <span className={cn(
+                        'px-2 py-0.5 rounded-full text-xs flex items-center gap-1',
+                        theme === 'light' ? 'bg-tech-100 text-tech-700' : 'bg-tech-500/20 text-tech-400'
+                      )}>
+                        <Smartphone size={10} /> {q.brand}
+                      </span>
+                    )}
+                    {q.budget && (
+                      <span className={cn(
+                        'px-2 py-0.5 rounded-full text-xs flex items-center gap-1',
+                        theme === 'light' ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-500/20 text-emerald-400'
+                      )}>
+                        <DollarSign size={10} /> {q.budget}
+                      </span>
+                    )}
+                  </div>
+                  <div className={cn('flex items-center gap-3 text-xs mb-4 pb-4 border-b', secondaryText, theme === 'light' ? 'border-slate-200' : 'border-white/10')}>
+                    <span>👤 {q.author}</span>
+                    <span>·</span>
+                    <span>{q.createdAt}</span>
+                  </div>
+                </div>
+
+                {q.isAnswered && q.answer && (
+                  <div className={cn('p-4 rounded-xl', theme === 'light' ? 'bg-emerald-50' : 'bg-emerald-500/10')}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-emerald-500 font-medium text-sm">💡 {q.answerAuthor || '专家'}</span>
+                    </div>
+                    <p className={cn('text-sm leading-relaxed', theme === 'light' ? 'text-slate-700' : 'text-emerald-100')}>{q.answer}</p>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         ) : (

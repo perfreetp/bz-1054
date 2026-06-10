@@ -8,6 +8,7 @@ import PostDetail from '@/pages/PostDetail';
 import VotePage from '@/pages/VotePage';
 import Questions from '@/pages/Questions';
 import Admin from '@/pages/Admin';
+import LiveDashboard from '@/pages/LiveDashboard';
 import { useStore } from '@/store';
 
 export default function App() {
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/vote" element={<VotePage />} />
           <Route path="/questions" element={<Questions />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/live-dashboard" element={<LiveDashboard />} />
           <Route path="*" element={<Home />} />
         </Route>
       </Routes>

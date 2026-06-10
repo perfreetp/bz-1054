@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import {
-  LayoutDashboard, Smartphone, GitCompare, MessageSquare, Vote, HelpCircle, Settings,
+  LayoutDashboard, Smartphone, GitCompare, MessageSquare, Vote, HelpCircle, Settings, Activity,
 } from 'lucide-react';
 import { useStore } from '@/store';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,7 @@ const navItems = [
   { path: '/compare', icon: GitCompare, label: '机型对比' },
   { path: '/vote', icon: Vote, label: '现场投票' },
   { path: '/questions', icon: HelpCircle, label: '提问墙' },
+  { path: '/live-dashboard', icon: Activity, label: '数据看板' },
   { path: '/admin', icon: Settings, label: '管理面板' },
 ];
 

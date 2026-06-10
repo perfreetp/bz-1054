@@ -1,4 +1,10 @@
-import type { Post, Brand, PhoneModel, Vote, Question, User, Comment } from '@/types';
+import type { Post, Brand, PhoneModel, Vote, Question, User, Comment, Session } from '@/types';
+
+export const mockSessions: Session[] = [
+  { id: 's1', name: '上午场', description: '10:00-12:00 旗舰新品体验', startTime: '10:00', endTime: '12:00', isActive: true, color: 'from-cyan-500/20 to-blue-500/20' },
+  { id: 's2', name: '下午场', description: '14:00-17:00 购机优惠活动', startTime: '14:00', endTime: '17:00', isActive: false, color: 'from-amber-500/20 to-orange-500/20' },
+  { id: 's3', name: '门店专场', description: '18:00-20:00 会员专属福利', startTime: '18:00', endTime: '20:00', isActive: false, color: 'from-violet-500/20 to-purple-500/20' },
+];
 
 export const mockBrands: Brand[] = [
   { id: 'huawei', name: '华为', logo: '📱', color: '#CF0A2C' },
@@ -292,6 +298,7 @@ export const mockVotes: Vote[] = [
     order: 0,
     endAt: '2024-02-28',
     totalVotes: 1017,
+    sessionId: 's1',
   },
   {
     id: 'v2',
@@ -312,6 +319,7 @@ export const mockVotes: Vote[] = [
     order: 1,
     endAt: '2024-03-15',
     totalVotes: 856,
+    sessionId: 's1',
   },
   {
     id: 'v3',
@@ -330,6 +338,7 @@ export const mockVotes: Vote[] = [
     order: 2,
     endAt: '2024-02-20',
     totalVotes: 1058,
+    sessionId: 's1',
   },
 ];
 
@@ -349,6 +358,7 @@ export const mockQuestions: Question[] = [
     tags: ['拍照', '5000元档'],
     brand: 'vivo',
     budget: '5000-7999',
+    sessionId: 's1',
   },
   {
     id: 'q2',
@@ -364,6 +374,7 @@ export const mockQuestions: Question[] = [
     color: 'from-cyan-500/20 to-blue-500/20',
     tags: ['数据迁移', '换机'],
     budget: '3000-4999',
+    sessionId: 's1',
   },
   {
     id: 'q3',
@@ -377,6 +388,7 @@ export const mockQuestions: Question[] = [
     color: 'from-amber-500/20 to-orange-500/20',
     tags: ['屏幕', '耐用性'],
     budget: '3000以下',
+    sessionId: 's1',
   },
   {
     id: 'q4',
@@ -390,6 +402,7 @@ export const mockQuestions: Question[] = [
     color: 'from-emerald-500/20 to-green-500/20',
     tags: ['老人机', '长续航'],
     budget: '3000以下',
+    sessionId: 's1',
   },
   {
     id: 'q5',
@@ -405,6 +418,7 @@ export const mockQuestions: Question[] = [
     color: 'from-violet-500/20 to-purple-500/20',
     tags: ['存储', '视频'],
     budget: '5000-7999',
+    sessionId: 's1',
   },
   {
     id: 'q6',
@@ -418,6 +432,7 @@ export const mockQuestions: Question[] = [
     color: 'from-sky-500/20 to-indigo-500/20',
     tags: ['充电'],
     budget: '4000-5999',
+    sessionId: 's1',
   },
   {
     id: 'q7',
@@ -432,6 +447,7 @@ export const mockQuestions: Question[] = [
     tags: ['游戏', '性能'],
     brand: 'xiaomi',
     budget: '4000-5999',
+    sessionId: 's1',
   },
 ];
 

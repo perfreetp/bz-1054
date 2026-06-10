@@ -1,7 +1,12 @@
 import { create } from 'zustand';
-import type { Post, Brand, PhoneModel, Vote, Question, User, Comment, ThemeMode, SensitiveWordHit, QuestionStatus, ExportSummary } from '@/types';
+import type {
+  Post, Brand, PhoneModel, Vote, Question, User, Comment,
+  ThemeMode, SensitiveWordHit, QuestionStatus, ExportSummary,
+  Session, HostPlaylistItem, LiveMetricPoint,
+} from '@/types';
 import {
-  mockPosts, mockBrands, mockModels, mockVotes, mockQuestions, mockUsers, defaultSensitiveWords,
+  mockPosts, mockBrands, mockModels, mockVotes, mockQuestions, mockUsers,
+  defaultSensitiveWords, mockSessions,
 } from '@/data/mockData';
 
 const escapeRegExp = (string: string) => {
@@ -40,7 +45,13 @@ interface AppState {
   filterWaterPost: boolean;
   userVotes: Record<string, string[]>;
   questionFilter: { brand?: string; budget?: string; status?: QuestionStatus };
-  featuredVoteId: string | null;
+
+  sessions: Session[];
+  currentSessionId: string;
+  hostPlaylist: HostPlaylistItem[];
+  isHostMode: boolean;
+  hostPlayingIndex: number;
+  liveMetrics: LiveMetricPoint[];
 
   setTheme: (theme: ThemeMode) => void;
   setSelectedBrand: (brandId: string | null) => void;
@@ -64,6 +75,8 @@ interface AppState {
   addQuestion: (content: string, author: string, brand?: string, budget?: string, tags?: string[]) => void;
   approveQuestion: (questionId: string) => void;
   rejectQuestion: (questionId: string) => void;
+  batchApproveQuestions: (ids: string[]) => void;
+  batchRejectQuestions: (ids: string[]) => void;
   answerQuestion: (questionId: string, answer: string, answerAuthor: string) => void;
   togglePinQuestion: (questionId: string) => void;
   toggleFeaturedQuestion: (questionId: string) => void;
@@ -74,7 +87,23 @@ interface AppState {
   filterSensitiveWords: (text: string) => string;
 
   clearTemporaryData: () => void;
-  generateSummary: (startDate?: Date) => ExportSummary;
+  generateSummary: (startDate?: Date, sessionId?: string) => ExportSummary;
+
+  createSession: (name: string, description: string, startTime: string, endTime: string) => void;
+  updateSession: (id: string, data: Partial<Session>) => void;
+  deleteSession: (id: string) => void;
+  switchSession: (id: string) => void;
+  getCurrentSessionData: () => { votes: Vote[]; questions: Question[]; comments: Comment[] };
+
+  addToPlaylist: (type: 'vote' | 'question', refId: string, title: string) => void;
+  removeFromPlaylist: (id: string) => void;
+  reorderPlaylist: (id: string, direction: 'up' | 'down') => void;
+  setHostMode: (active: boolean) => void;
+  setHostPlayingIndex: (index: number) => void;
+
+  recordLiveMetric: () => void;
+  getSessionFilteredVotes: () => Vote[];
+  getSessionFilteredQuestions: () => Question[];
 }
 
 const loadUserVotes = (): Record<string, string[]> => {
@@ -110,7 +139,13 @@ export const useStore = create<AppState>((set, get) => ({
   filterWaterPost: false,
   userVotes: loadUserVotes(),
   questionFilter: { status: 'approved' },
-  featuredVoteId: mockVotes.find((v) => v.isFeatured)?.id || null,
+
+  sessions: mockSessions,
+  currentSessionId: 's1',
+  hostPlaylist: [],
+  isHostMode: false,
+  hostPlayingIndex: 0,
+  liveMetrics: [],
 
   setTheme: (theme) => {
     set({ theme });
@@ -123,7 +158,6 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   setSelectedBrand: (brandId) => set({ selectedBrand: brandId }),
-
   toggleCompareModel: (modelId) => {
     const current = get().compareModels;
     if (current.includes(modelId)) {
@@ -132,13 +166,9 @@ export const useStore = create<AppState>((set, get) => ({
       set({ compareModels: [...current, modelId] });
     }
   },
-
   clearCompareModels: () => set({ compareModels: [] }),
-
   setSearchKeyword: (keyword) => set({ searchKeyword: keyword }),
-
   setFilterWaterPost: (filter) => set({ filterWaterPost: filter }),
-
   setQuestionFilter: (filter) => set({ questionFilter: filter }),
 
   addComment: (postId, content, author, avatar) => {
@@ -153,6 +183,7 @@ export const useStore = create<AppState>((set, get) => ({
       likes: 0,
       createdAt: new Date().toLocaleString('zh-CN'),
       isTemp: true,
+      sessionId: get().currentSessionId,
     };
     set((state) => ({
       posts: state.posts.map((post) =>
@@ -238,6 +269,7 @@ export const useStore = create<AppState>((set, get) => ({
       endAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
       totalVotes: 0,
       isTemp: true,
+      sessionId: get().currentSessionId,
     };
     set((state) => ({ votes: [newVote, ...state.votes] }));
   },
@@ -253,14 +285,13 @@ export const useStore = create<AppState>((set, get) => ({
   setFeaturedVote: (voteId) => {
     set((state) => ({
       votes: state.votes.map((v) => ({ ...v, isFeatured: v.id === voteId })),
-      featuredVoteId: voteId,
     }));
   },
 
   deleteVote: (voteId) => {
     set((state) => ({
       votes: state.votes.filter((v) => v.id !== voteId),
-      featuredVoteId: state.featuredVoteId === voteId ? null : state.featuredVoteId,
+      hostPlaylist: state.hostPlaylist.filter((p) => !(p.type === 'vote' && p.refId === voteId)),
     }));
   },
 
@@ -280,6 +311,7 @@ export const useStore = create<AppState>((set, get) => ({
       brand,
       budget,
       isTemp: true,
+      sessionId: get().currentSessionId,
     };
     set((state) => ({ questions: [...state.questions, newQuestion] }));
   },
@@ -296,6 +328,22 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({
       questions: state.questions.map((q) =>
         q.id === questionId ? { ...q, status: 'rejected' as QuestionStatus } : q
+      ),
+    }));
+  },
+
+  batchApproveQuestions: (ids) => {
+    set((state) => ({
+      questions: state.questions.map((q) =>
+        ids.includes(q.id) ? { ...q, status: 'approved' as QuestionStatus } : q
+      ),
+    }));
+  },
+
+  batchRejectQuestions: (ids) => {
+    set((state) => ({
+      questions: state.questions.map((q) =>
+        ids.includes(q.id) ? { ...q, status: 'rejected' as QuestionStatus } : q
       ),
     }));
   },
@@ -385,6 +433,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   clearTemporaryData: () => {
+    const sessionId = get().currentSessionId;
     set({
       votes: mockVotes.map((v) => ({ ...v })),
       questions: mockQuestions.map((q) => ({ ...q })),
@@ -394,17 +443,18 @@ export const useStore = create<AppState>((set, get) => ({
       })),
       userVotes: {},
       sensitiveWordHits: [],
-      featuredVoteId: mockVotes.find((v) => v.isFeatured)?.id || null,
+      hostPlaylist: [],
     });
     localStorage.removeItem('userVotes');
   },
 
-  generateSummary: (startDate) => {
+  generateSummary: (startDate, sessionId) => {
     const state = get();
     const now = new Date();
     const earliestDate = new Date(0);
-
     const rangeStart = startDate || earliestDate;
+    const targetSessionId = sessionId || state.currentSessionId;
+    const session = state.sessions.find((s) => s.id === targetSessionId);
 
     const isInRange = (dateStr: string) => {
       try {
@@ -415,19 +465,30 @@ export const useStore = create<AppState>((set, get) => ({
       }
     };
 
-    const filteredComments = state.posts.flatMap((p) =>
-      p.comments.filter((c) => isInRange(c.createdAt))
+    const sessionVotes = state.votes.filter(
+      (v) => !targetSessionId || v.sessionId === targetSessionId || !v.sessionId
     );
-    const filteredQuestions = state.questions.filter((q) => isInRange(q.createdAt));
+    const sessionQuestions = state.questions.filter(
+      (q) => !targetSessionId || q.sessionId === targetSessionId || !q.sessionId
+    );
+    const filteredQuestions = sessionQuestions.filter((q) => isInRange(q.createdAt));
+    const filteredComments = state.posts.flatMap((p) =>
+      p.comments.filter((c) => {
+        const dateOk = isInRange(c.createdAt);
+        const sessionOk = !targetSessionId || c.sessionId === targetSessionId || !c.sessionId;
+        return dateOk && sessionOk;
+      })
+    );
 
     const tempComments = filteredComments.filter((c) => isTempId(c.id)).length;
     const tempQuestions = filteredQuestions.filter((q) => isTempId(q.id)).length;
-
-    const totalVotesCast = state.votes.reduce((sum, v) => sum + v.totalVotes, 0);
+    const totalVotesCast = sessionVotes.reduce((sum, v) => sum + v.totalVotes, 0);
     const totalVoters = Object.keys(state.userVotes).length;
 
     const summary: ExportSummary = {
       exportTime: now.toLocaleString('zh-CN'),
+      sessionId: targetSessionId,
+      sessionName: session?.name,
       timeRange: {
         start: rangeStart.toLocaleString('zh-CN'),
         end: now.toLocaleString('zh-CN'),
@@ -465,7 +526,7 @@ export const useStore = create<AppState>((set, get) => ({
           level: u.level,
           badge: u.badge,
         })),
-      voteResults: state.votes.map((v) => ({
+      voteResults: sessionVotes.map((v) => ({
         id: v.id,
         title: v.title,
         description: v.description,
@@ -480,7 +541,7 @@ export const useStore = create<AppState>((set, get) => ({
           percentage: v.totalVotes > 0 ? Number(((o.votes / v.totalVotes) * 100).toFixed(2)) : 0,
         })),
       })),
-      featuredQuestions: state.questions
+      featuredQuestions: sessionQuestions
         .filter((q) => q.isFeatured && q.isAnswered && isInRange(q.createdAt))
         .map((q) => ({
           content: q.content,
@@ -509,5 +570,150 @@ export const useStore = create<AppState>((set, get) => ({
     };
 
     return summary;
+  },
+
+  createSession: (name, description, startTime, endTime) => {
+    const colors = [
+      'from-cyan-500/20 to-blue-500/20',
+      'from-amber-500/20 to-orange-500/20',
+      'from-violet-500/20 to-purple-500/20',
+      'from-emerald-500/20 to-green-500/20',
+      'from-rose-500/20 to-pink-500/20',
+    ];
+    const newSession: Session = {
+      id: `s_${Date.now()}`,
+      name,
+      description,
+      startTime,
+      endTime,
+      isActive: false,
+      color: colors[Math.floor(Math.random() * colors.length)],
+    };
+    set((state) => ({ sessions: [...state.sessions, newSession] }));
+  },
+
+  updateSession: (id, data) => {
+    set((state) => ({
+      sessions: state.sessions.map((s) =>
+        s.id === id ? { ...s, ...data } : s
+      ),
+    }));
+  },
+
+  deleteSession: (id) => {
+    const state = get();
+    if (state.sessions.length <= 1) return;
+    const newCurrentId = state.currentSessionId === id
+      ? state.sessions.find((s) => s.id !== id)?.id || state.sessions[0].id
+      : state.currentSessionId;
+    set({
+      sessions: state.sessions.filter((s) => s.id !== id),
+      currentSessionId: newCurrentId,
+    });
+  },
+
+  switchSession: (id) => {
+    set((state) => ({
+      currentSessionId: id,
+      sessions: state.sessions.map((s) => ({ ...s, isActive: s.id === id })),
+    }));
+  },
+
+  getCurrentSessionData: () => {
+    const state = get();
+    const sid = state.currentSessionId;
+    return {
+      votes: state.votes.filter((v) => v.sessionId === sid || !v.sessionId),
+      questions: state.questions.filter((q) => q.sessionId === sid || !q.sessionId),
+      comments: state.posts.flatMap((p) =>
+        p.comments.filter((c) => c.sessionId === sid || !c.sessionId)
+      ),
+    };
+  },
+
+  addToPlaylist: (type, refId, title) => {
+    const state = get();
+    if (state.hostPlaylist.some((p) => p.type === type && p.refId === refId)) return;
+    const newItem: HostPlaylistItem = {
+      id: `pl_${Date.now()}`,
+      type,
+      refId,
+      order: state.hostPlaylist.length,
+      title,
+    };
+    set({ hostPlaylist: [...state.hostPlaylist, newItem] });
+  },
+
+  removeFromPlaylist: (id) => {
+    set((state) => ({
+      hostPlaylist: state.hostPlaylist
+        .filter((p) => p.id !== id)
+        .map((p, i) => ({ ...p, order: i })),
+      hostPlayingIndex: Math.min(state.hostPlayingIndex, Math.max(0, state.hostPlaylist.length - 2)),
+    }));
+  },
+
+  reorderPlaylist: (id, direction) => {
+    set((state) => {
+      const idx = state.hostPlaylist.findIndex((p) => p.id === id);
+      if (idx < 0) return state;
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= state.hostPlaylist.length) return state;
+      const newList = [...state.hostPlaylist];
+      [newList[idx], newList[swapIdx]] = [newList[swapIdx], newList[idx]];
+      return { hostPlaylist: newList.map((p, i) => ({ ...p, order: i })) };
+    });
+  },
+
+  setHostMode: (active) => {
+    set({ isHostMode: active, hostPlayingIndex: 0 });
+  },
+
+  setHostPlayingIndex: (index) => {
+    set({ hostPlayingIndex: index });
+  },
+
+  recordLiveMetric: () => {
+    const state = get();
+    const sid = state.currentSessionId;
+    const now = new Date();
+    const timeLabel = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const sessionQuestions = state.questions.filter((q) => q.sessionId === sid || !q.sessionId);
+    const sessionVotes = state.votes.filter((v) => v.sessionId === sid || !v.sessionId);
+    const newQuestions = sessionQuestions.filter((q) => {
+      try {
+        const d = new Date(q.createdAt);
+        return (now.getTime() - d.getTime()) < 60000;
+      } catch {
+        return false;
+      }
+    }).length;
+    const voterCount = sessionVotes.reduce((sum, v) => sum + v.totalVotes, 0);
+    const commentHeat = state.posts.reduce((sum, p) => sum + p.comments.length, 0);
+    const sensitiveHits = state.sensitiveWordHits.reduce((sum, h) => sum + h.count, 0);
+
+    const point: LiveMetricPoint = {
+      time: timeLabel,
+      newQuestions,
+      voterCount,
+      commentHeat,
+      sensitiveHits,
+    };
+
+    set({
+      liveMetrics: [...state.liveMetrics.slice(-59), point],
+    });
+  },
+
+  getSessionFilteredVotes: () => {
+    const state = get();
+    const sid = state.currentSessionId;
+    return state.votes.filter((v) => v.sessionId === sid || !v.sessionId);
+  },
+
+  getSessionFilteredQuestions: () => {
+    const state = get();
+    const sid = state.currentSessionId;
+    return state.questions.filter((q) => q.sessionId === sid || !q.sessionId);
   },
 }));

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Vote as VoteIcon, Users, Check, Clock, Pause, Play, Star, Plus, Trash2, Monitor,
+  ChevronLeft, ChevronRight, X, ArrowUp, ArrowDown, ListMusic, Radio,
 } from 'lucide-react';
 import { useStore } from '@/store';
 import { cn } from '@/lib/utils';
@@ -10,9 +11,14 @@ import {
 
 export default function VotePage() {
   const {
-    votes, submitVote, userVotes, toggleVotePause, setFeaturedVote, deleteVote,
-    createVote, theme,
+    getSessionFilteredVotes, submitVote, userVotes, toggleVotePause, setFeaturedVote, deleteVote,
+    createVote, sessions, currentSessionId, switchSession,
+    hostPlaylist, isHostMode, hostPlayingIndex, setHostMode, setHostPlayingIndex,
+    addToPlaylist, removeFromPlaylist, reorderPlaylist, theme,
   } = useStore();
+
+  const votes = getSessionFilteredVotes();
+
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string[]>>({});
   const [showCreate, setShowCreate] = useState(false);
   const [newVote, setNewVote] = useState({
@@ -74,6 +80,24 @@ export default function VotePage() {
       });
     }
   };
+
+  const handleHostNext = useCallback(() => {
+    if (hostPlaylist.length === 0) return;
+    setHostPlayingIndex((hostPlayingIndex + 1) % hostPlaylist.length);
+  }, [hostPlaylist.length, hostPlayingIndex, setHostPlayingIndex]);
+
+  const handleHostPrev = useCallback(() => {
+    if (hostPlaylist.length === 0) return;
+    setHostPlayingIndex((hostPlayingIndex - 1 + hostPlaylist.length) % hostPlaylist.length);
+  }, [hostPlaylist.length, hostPlayingIndex, setHostPlayingIndex]);
+
+  useEffect(() => {
+    if (!isHostMode || hostPlaylist.length === 0) return;
+    const timer = setInterval(() => {
+      handleHostNext();
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [isHostMode, hostPlaylist.length, handleHostNext]);
 
   const VoteCard = ({ vote, isFeatured = false }: { vote: typeof votes[0]; isFeatured?: boolean }) => {
     const hasVoted = !!userVotes[vote.id];
@@ -159,7 +183,7 @@ export default function VotePage() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <div className="pt-4 border-t border-white/10 flex flex-wrap gap-3">
+            <div className={cn('pt-4 border-t', theme === 'light' ? 'border-slate-200' : 'border-white/10', 'flex flex-wrap gap-3')}>
               {vote.options.map((opt, i) => (
                 <span
                   key={opt.id}
@@ -247,8 +271,74 @@ export default function VotePage() {
     );
   };
 
+  const currentItem = hostPlaylist[hostPlayingIndex];
+  const currentHostVote = currentItem?.type === 'vote'
+    ? votes.find((v) => v.id === currentItem.refId)
+    : undefined;
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 relative">
+      {isHostMode && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/95 backdrop-blur-xl">
+          <div className="flex items-center justify-between p-6">
+            <div className="flex items-center gap-3">
+              <Radio className="text-red-500 animate-pulse" size={24} />
+              <span className="text-white text-lg font-bold">主持人模式</span>
+              {currentItem && (
+                <span className="text-slate-400 text-sm">
+                  {hostPlayingIndex + 1} / {hostPlaylist.length}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => setHostMode(false)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+            >
+              <X size={18} />
+              退出主持模式
+            </button>
+          </div>
+
+          <div className="flex-1 flex items-center justify-center px-12 pb-8">
+            {hostPlaylist.length === 0 ? (
+              <div className="text-center">
+                <ListMusic className="text-slate-600 mx-auto mb-4" size={64} />
+                <p className="text-slate-400 text-xl">播放列表为空</p>
+                <p className="text-slate-500 text-sm mt-2">请先添加投票到播放列表</p>
+              </div>
+            ) : currentHostVote ? (
+              <div className="w-full max-w-5xl">
+                <VoteCard vote={currentHostVote} isFeatured />
+              </div>
+            ) : currentItem ? (
+              <div className="text-center">
+                <p className="text-slate-400 text-xl">{currentItem.title}</p>
+              </div>
+            ) : null}
+          </div>
+
+          {hostPlaylist.length > 0 && (
+            <div className="flex items-center justify-center gap-6 pb-8">
+              <button
+                onClick={handleHostPrev}
+                className="p-4 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+              >
+                <ChevronLeft size={28} />
+              </button>
+              <div className="px-6 py-3 rounded-xl bg-white/5 text-white text-center min-w-[200px]">
+                {currentItem ? currentItem.title : ''}
+              </div>
+              <button
+                onClick={handleHostNext}
+                className="p-4 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+              >
+                <ChevronRight size={28} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -259,16 +349,42 @@ export default function VotePage() {
             共 {votes.length} 场投票，{votes.reduce((sum, v) => sum + v.totalVotes, 0).toLocaleString()} 人次参与
           </p>
         </div>
-        <button
-          onClick={() => setShowCreate(!showCreate)}
-          className="gradient-btn flex items-center gap-2"
-        >
-          <Plus size={18} />
-          新建投票
-        </button>
+        <div className="flex items-center gap-3">
+          <select
+            value={currentSessionId}
+            onChange={(e) => switchSession(e.target.value)}
+            className={cn(
+              'px-3 py-2 rounded-xl border text-sm outline-none transition-all',
+              inputBg, textColor,
+              'focus:border-cyber-500 focus:ring-2 focus:ring-cyber-500/20'
+            )}
+          >
+            {sessions.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => isHostMode ? setHostMode(false) : setHostMode(true)}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all',
+              isHostMode
+                ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                : 'gradient-btn'
+            )}
+          >
+            {isHostMode ? <X size={18} /> : <Radio size={18} />}
+            {isHostMode ? '退出主持模式' : '进入主持模式'}
+          </button>
+          <button
+            onClick={() => setShowCreate(!showCreate)}
+            className="gradient-btn flex items-center gap-2"
+          >
+            <Plus size={18} />
+            新建投票
+          </button>
+        </div>
       </div>
 
-      {/* Create Vote Form */}
       {showCreate && (
         <form onSubmit={handleCreateVote} className={cn('rounded-2xl p-6 border', cardBg)}>
           <h3 className={cn('text-lg font-bold mb-4', textColor)}>新建临时投票</h3>
@@ -359,7 +475,68 @@ export default function VotePage() {
         </form>
       )}
 
-      {/* Featured Vote - Big Screen Display */}
+      {hostPlaylist.length > 0 && (
+        <section className={cn('rounded-2xl p-6 border', cardBg)}>
+          <div className="flex items-center gap-2 mb-4">
+            <ListMusic className="text-cyber-400" size={20} />
+            <h2 className={cn('text-lg font-bold', textColor)}>主持播放列表</h2>
+          </div>
+          <div className="space-y-2">
+            {hostPlaylist.map((item, idx) => (
+              <div
+                key={item.id}
+                className={cn(
+                  'flex items-center gap-3 p-3 rounded-xl transition-all',
+                  idx === hostPlayingIndex
+                    ? 'bg-cyber-500/10 border border-cyber-500/30'
+                    : theme === 'light' ? 'bg-slate-50' : 'bg-slate-800/30'
+                )}
+              >
+                <span className={cn('text-sm w-6 text-center', secondaryText)}>{idx + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <p className={cn('text-sm font-medium truncate', textColor)}>{item.title}</p>
+                  <p className={cn('text-xs', secondaryText)}>
+                    {item.type === 'vote' ? '投票' : '提问'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => reorderPlaylist(item.id, 'up')}
+                    disabled={idx === 0}
+                    className={cn(
+                      'p-1.5 rounded-lg transition-colors',
+                      idx === 0
+                        ? 'text-slate-600 cursor-not-allowed'
+                        : theme === 'light' ? 'text-slate-500 hover:bg-slate-200' : 'text-slate-400 hover:bg-white/10'
+                    )}
+                  >
+                    <ArrowUp size={14} />
+                  </button>
+                  <button
+                    onClick={() => reorderPlaylist(item.id, 'down')}
+                    disabled={idx === hostPlaylist.length - 1}
+                    className={cn(
+                      'p-1.5 rounded-lg transition-colors',
+                      idx === hostPlaylist.length - 1
+                        ? 'text-slate-600 cursor-not-allowed'
+                        : theme === 'light' ? 'text-slate-500 hover:bg-slate-200' : 'text-slate-400 hover:bg-white/10'
+                    )}
+                  >
+                    <ArrowDown size={14} />
+                  </button>
+                  <button
+                    onClick={() => removeFromPlaylist(item.id)}
+                    className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {featuredVote && (
         <section>
           <div className="flex items-center gap-2 mb-4">
@@ -372,14 +549,12 @@ export default function VotePage() {
         </section>
       )}
 
-      {/* All Votes List */}
       <section>
         <h2 className={cn('text-lg font-bold mb-4', textColor)}>全部投票</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {otherVotes.map((vote) => (
             <div key={vote.id} className="relative group">
               <VoteCard vote={vote} />
-              {/* Admin Controls */}
               <div className="absolute top-4 left-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                 <button
                   onClick={() => toggleVotePause(vote.id)}
@@ -404,6 +579,13 @@ export default function VotePage() {
                   title="设为大屏展示"
                 >
                   <Monitor size={16} />
+                </button>
+                <button
+                  onClick={() => addToPlaylist('vote', vote.id, vote.title)}
+                  className="p-2 rounded-lg bg-cyber-500/80 text-white backdrop-blur hover:bg-cyber-500 transition-colors"
+                  title="加入播放列表"
+                >
+                  <ListMusic size={16} />
                 </button>
                 <button
                   onClick={() => deleteVote(vote.id)}
